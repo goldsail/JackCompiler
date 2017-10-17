@@ -1,6 +1,7 @@
 package JackCompiler;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -57,10 +58,15 @@ public class JackTokenizer {
     private HashMap<String, KeyWord> keywordSet;
 
     public JackTokenizer(String path) throws IOException {
+        /*
         File file = new File(path);
         bytes = new byte[(int)file.length()];
         FileInputStream stream = new FileInputStream(file);
         stream.read(bytes);
+        */
+
+        bytes = readFileWithCommentsRemoved(path);
+
         pos = 0;
 
         symbolSet = new HashSet<Byte>();
@@ -233,6 +239,44 @@ public class JackTokenizer {
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+    }
+
+    private static byte[] readFileWithCommentsRemoved(String path) throws IOException {
+        byte[] buf = new byte[1];
+        ArrayList<Byte> ret = new ArrayList<Byte>();
+        File file = new File(path);
+        FileInputStream stream = new FileInputStream(file);
+        while (stream.read(buf) != -1) {
+            if (buf[0] != '/') {
+                ret.add(buf[0]);
+            } else {
+                if (stream.read(buf) != -1) {
+                    if (buf[0] == '*') {
+                        while (stream.read(buf) != -1) {
+                            if (buf[0] == '*') {
+                                if (stream.read(buf) != -1 && buf[0] == '/') {
+                                    break;
+                                }
+                            }
+                        }
+                    } else if (buf[0] == '/') {
+                        while (stream.read(buf) != -1) {
+                            if (buf[0] == '\n') {
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+
+        byte[] temp = new byte[ret.size()];
+        for (int i = 0; i < ret.size(); i++) {
+            temp[i] = ret.get(i);
+        }
+        return temp;
     }
 
 }
