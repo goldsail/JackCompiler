@@ -9,9 +9,12 @@ import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.FileOutputStream;
-import java.io.PrintWriter;
+import java.io.*;
 
+/**
+ * Jack Analyzer
+ * reference: pp. 217-218 textbook
+ */
 public class JackAnalyzer {
 
     private JackTokenizer tokenizer;
@@ -78,23 +81,157 @@ public class JackAnalyzer {
     }
 
     private void procClassVarDecOrSubroutineDec(Element currNode) throws JackCompilerException {
+        tokenizer.advance();
+        if (tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.getSymbol() == '}') {
+            return;
+        }
+        _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.KEYWORD);
+
+        Element newNode = null;
+
+        switch (tokenizer.getKeyWord()) {
+            case STATIC:
+            case FIELD:
+                newNode = xmlDocument.createElement("classVarDec");
+
+                switch (tokenizer.getKeyWord()) {
+                    case STATIC:
+                        newNode.appendChild(_createTextElement("keyword", " static ", xmlDocument));
+                        break;
+                    case FIELD:
+                        newNode.appendChild(_createTextElement("keyword", " field ", xmlDocument));
+                        break;
+                }
+
+                procType(newNode);
+
+                tokenizer.advance();
+                _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.IDENTIFIER);
+                newNode.appendChild(_createTextElement("identifier", " " + tokenizer.getIdentifier() + " ", xmlDocument));
+
+                while (true) {
+                    tokenizer.advance();
+                    _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL);
+                    if (tokenizer.getSymbol() == ';') {
+                        newNode.appendChild(_createTextElement("symbol", " ; ", xmlDocument));
+                        break;
+                    } else {
+                        _assert(tokenizer.getSymbol() == ',');
+                        newNode.appendChild(_createTextElement("symbol", " , ", xmlDocument));
+                        tokenizer.advance();
+                        _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.IDENTIFIER);
+                        newNode.appendChild(_createTextElement("identifier", " " + tokenizer.getIdentifier() + " ", xmlDocument));
+                    }
+                }
+
+                break;
+            case CONSTRUCTOR:
+            case FUNCTION:
+            case METHOD:
+                newNode = xmlDocument.createElement("subroutineDec");
+
+                switch (tokenizer.getKeyWord()) {
+                    case CONSTRUCTOR:
+                        newNode.appendChild(_createTextElement("keyword", " constructor ", xmlDocument));
+                        break;
+                    case FUNCTION:
+                        newNode.appendChild(_createTextElement("keyword", " function ", xmlDocument));
+                        break;
+                    case METHOD:
+                        newNode.appendChild(_createTextElement("keyword", " method ", xmlDocument));
+                        break;
+                }
+
+                procTypeOrVoid(newNode);
+
+                tokenizer.advance();
+                _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.IDENTIFIER);
+                newNode.appendChild(_createTextElement("identifier", " " + tokenizer.getIdentifier() + " ", xmlDocument));
+
+                tokenizer.advance();
+                _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.getSymbol() == '(');
+                newNode.appendChild(_createTextElement("symbol", " ( ", xmlDocument));
+
+                procParameterList(newNode);
+
+                tokenizer.advance();
+                _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.getSymbol() == ')');
+                newNode.appendChild(_createTextElement("symbol", " ) ", xmlDocument));
+
+                procSubroutineBody(newNode);
+
+                break;
+            default:
+                _assert(false);
+        }
+
+        currNode.appendChild(newNode);
+        procClassVarDecOrSubroutineDec(currNode);
+    }
+
+    private void procType(Element currNode) {
 
     }
 
-    private static void writeXML(Document document,String filename) {
+    private void procTypeOrVoid(Element currNode) {
+
+    }
+
+    private void procParameterList(Element currNode) {
+
+    }
+
+    private void procSubroutineBody(Element currNode) {
+
+    }
+
+    private static void writeXML(Document document, String filename) {
         try {
-            document.normalize();
-
-            TransformerFactory tFactory = TransformerFactory.newInstance();
-            Transformer transformer = tFactory.newTransformer();
-            transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
-            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-
+            TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            Transformer transformer = transformerFactory.newTransformer();
             DOMSource source = new DOMSource(document);
-            PrintWriter pw = new PrintWriter(new FileOutputStream(filename));
-            StreamResult result = new StreamResult(pw);
+
+            StreamResult result =  new StreamResult(new StringWriter());
+
+            //t.setParameter(OutputKeys.INDENT, "yes");
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
             transformer.transform(source, result);
 
+            //writing to file
+            FileOutputStream fop = null;
+            File file;
+            try {
+
+                file = new File(filename);
+                fop = new FileOutputStream(file);
+
+                // if file doesnt exists, then create it
+                if (!file.exists()) {
+                    file.createNewFile();
+                }
+
+                // get the content in bytes
+                String xmlString = result.getWriter().toString();
+                System.out.println(xmlString);
+                byte[] contentInBytes = xmlString.getBytes();
+
+                fop.write(contentInBytes);
+                fop.flush();
+                fop.close();
+
+                System.out.println("Done");
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                try {
+                    if (fop != null) {
+                        fop.close();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
