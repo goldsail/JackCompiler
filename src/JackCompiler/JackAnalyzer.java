@@ -672,6 +672,7 @@ public class JackAnalyzer {
         // ends after a right bracket or a semicolon or a right square bracket or a comma or an operator
 
         Element newNode = doc.createElement("term");
+        Element subNode;
 
         switch (tokenizer.getTokenType()) {
             case INT_CONST:
@@ -701,8 +702,6 @@ public class JackAnalyzer {
 
                 tokenizer.advance();
                 _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL);
-
-                Element subNode;
 
                 switch (tokenizer.getSymbol()) {
                     case '.':
@@ -752,13 +751,14 @@ public class JackAnalyzer {
                         break;
                 }
 
-
                 break;
 
             case KEYWORD:
                 _assert(keywordConstants.containsKey(tokenizer.getKeyWord()));
+
                 newNode.appendChild(_createTextElement("keyword", " " + keywordConstants.get(tokenizer.getKeyWord()) + " "));
                 tokenizer.advance();
+
                 break;
         }
 
@@ -843,22 +843,16 @@ public class JackAnalyzer {
         }
     }
 
-
-    //
-
-
-
-
     /**
      * Unit test
-     * @param args optional
+     * @param args paths of the input file (*.jack) and output file (*.xml)
      */
     public static void main(String[] args) {
         try {
-            JackAnalyzer test = new JackAnalyzer(new JackTokenizer("C:/Users/kingi/Desktop/JackTest/test.jack"));
+            JackAnalyzer test = new JackAnalyzer(new JackTokenizer(args[0]));
             Document doc = test.analyze();
 
-            writeXML(doc, "C:/Users/kingi/Desktop/JackTest/test.xml");
+            writeXML(doc, args[1]);
         } catch (Exception e) {
             e.printStackTrace();
         }
