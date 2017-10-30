@@ -604,7 +604,7 @@ public class JackAnalyzer {
     // Expressions
 
     private void procExpressionWithoutFirstToken(Element currNode) throws JackCompilerException {
-        // ends after a right bracket or a semicolon or a right square bracket
+        // ends after a right bracket or a semicolon or a right square bracket or a comma
 
         Element newNode = doc.createElement("expression");
 
@@ -619,16 +619,72 @@ public class JackAnalyzer {
     }
 
     private void procSubroutineCall(Element currNode) throws JackCompilerException {
+        tokenizer.advance();
+        procSubroutineCallWithoutFirstToken(currNode);
+    }
+
+    private void procSubroutineCallWithoutFirstToken(Element currNode) throws JackCompilerException {
         // ends after a semicolon
-
-        tokenizer.advance(); // for test only; to do
-
 
         Element newNode = doc.createElement("subroutineCall");
 
-        // to do
+        _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.IDENTIFIER);
+        String identifierName = tokenizer.getIdentifier();
+
+        newNode.appendChild(_createTextElement("identifier", " " + identifierName + " "));
+
+        tokenizer.advance();
+        _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL);
+
+        switch (tokenizer.getSymbol()) {
+            case '.':
+                newNode.appendChild(_createTextElement("symbol", " . "));
+                procSubroutineName(newNode);
+            case '(':
+                _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.getSymbol() == '(');
+                newNode.appendChild(_createTextElement("symbol", " ( "));
+
+                procExpressionList(newNode);
+
+                _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.getSymbol() == ')');
+                newNode.appendChild(_createTextElement("symbol", " ) "));
+                break;
+            default:
+                _assert(false);
+
+        }
 
         currNode.appendChild(newNode);
+    }
+
+    private void procExpressionList(Element currNode) throws JackCompilerException {
+        // ends after a right bracket
+
+        tokenizer.advance();
+        if (tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL && tokenizer.getSymbol() == ')') {
+            currNode.appendChild(doc.createElement("expressionList"));
+            return;
+        }
+
+        Element newNode = doc.createElement("expressionList");
+
+        while (true) {
+            procExpressionWithoutFirstToken(newNode);
+            _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL);
+
+            switch (tokenizer.getSymbol()) {
+                case ',':
+                    newNode.appendChild(_createTextElement("symbol", " , "));
+                    procExpressionWithoutFirstToken(newNode);
+                    break;
+                case ')':
+                    currNode.appendChild(newNode);
+                    return;
+                default:
+                    _assert(false);
+            }
+
+        }
     }
 
 
