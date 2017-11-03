@@ -362,7 +362,7 @@ public class JackAnalyzer {
             tokenizer.advance();
             _assert(tokenizer.getTokenType() == JackTokenizer.TokenType.SYMBOL);
             if (tokenizer.getSymbol() == ',') {
-                currNode.appendChild(_createTextElement("symbol", " , "));
+                newNode.appendChild(_createTextElement("symbol", " , "));
                 procVarName(newNode);
             } else {
                 _assert(tokenizer.getSymbol() == ';');
