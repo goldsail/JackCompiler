@@ -2,54 +2,81 @@ package JackCompiler;
 
 import org.w3c.dom.*;
 
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 
 public class JackCodeGenerator {
 
+    private class Symbol {
+        String name;
+        String type;
+        Symbol(String name, String type) {
+            this.name = name;
+            this.type = type;
+        }
+    }
+
+    private ArrayList<Document> docs;
     private Document doc;
     private ArrayList<String> codes;
     private HashMap<String, Integer> fieldMap;
     private HashMap<String, Integer> staticMap;
-    private String className;
+    private ArrayList<String> classNames;
+    private int classIndex;
 
-    public JackCodeGenerator(Document doc) {
-        this.doc = doc;
+    public JackCodeGenerator(ArrayList<Document> docs) {
+        this.docs = docs;
     }
 
-    public String[] generate() throws JackCompilerException {
+    public ArrayList<String> generate() throws JackCompilerException {
 
+        this.doc = null;
         this.codes = new ArrayList<String>();
+        this.fieldMap = new HashMap<String, Integer>();
+        this.staticMap = new HashMap<String, Integer>();
+        this.classNames = new ArrayList<String>();
+        this.classIndex = 0;
 
-        procClass();
-
-        /*
-        try {
-            procClass();
-        } catch (Exception e) {
-            throw new JackCompilerException();
-        }
-        */
-        for (String str : codes) {
-            System.out.println(str);
+        for (Document doc : this.docs) {
+            // loop 1
+            // generate staticMap, fieldMap, and classNames
+            Element classNameNode = getChildren(doc.getDocumentElement()).get(1);
+            classNames.add(classNameNode.getFirstChild().getNodeValue());
         }
 
-        String[] ret = new String[codes.size()];
-        return codes.toArray(ret);
+        for (Document doc : this.docs) {
+            // loop 2
+            // generate codes for subroutines in each class
+            this.doc = doc;
+            procClass(doc.getDocumentElement());
+            classIndex++;
+        }
+
+        return this.codes;
     }
 
-    private static Element[] getChildrenByTagName(Element node, String tagName) {
-        ArrayList<Element> arr = new ArrayList<Element>();
-        NodeList list = node.getElementsByTagName(tagName);
-        for (int i = 0; i < list.getLength(); i++) {
-            Element e = (Element)list.item(i);
-            arr.add(e);
-        }
-        Element[] ret = new Element[arr.size()];
-        return arr.toArray(ret);
+    private void procClass(Element node) throws JackCompilerException {
+
     }
 
-    private static Element[] getChildren(Element node) {
+    private ArrayList<Symbol> getFields(Element classNode) throws JackCompilerException {
+        ArrayList<Symbol> ret = new ArrayList<Symbol>();
+
+
+
+        return ret;
+    }
+
+    private ArrayList<Symbol> getStatics(Element classNode) throws JackCompilerException {
+        ArrayList<Symbol> ret = new ArrayList<Symbol>();
+
+
+
+        return ret;
+    }
+
+    private static ArrayList<Element> getChildren(Element node) {
         ArrayList<Element> arr = new ArrayList<Element>();
         NodeList list = node.getChildNodes();
         for (int i = 0; i < list.getLength(); i++) {
@@ -58,123 +85,35 @@ public class JackCodeGenerator {
                 arr.add((Element)temp);
             }
         }
-        Element[] ret = new Element[arr.size()];
-        return arr.toArray(ret);
+        return arr;
     }
 
-    private void procClass() throws JackCompilerException {
-        fieldMap = new HashMap<String, Integer>();
-        staticMap = new HashMap<String, Integer>();
+    /**
+     * Unit test
+     * @param args paths of the input files (*.jack) and output file (*.xml)
+     */
+    public static void main(String[] args) {
+        try {
 
-        this.className = getChildren(doc.getDocumentElement())[1].getFirstChild().getNodeValue().trim();
-
-        Element[] nodesClassVarDec =  getChildrenByTagName(doc.getDocumentElement(),"classVarDec");
-        for (Element currNode : nodesClassVarDec) {
-            Element[] children = getChildren(currNode);
-            switch (children[0].getTextContent()) {
-                case " field ":
-                    for (int i = 2; i < children.length; i++) {
-                        if (children[i].getTagName().equals("identifier")) {
-                            fieldMap.put(children[i].getFirstChild().getNodeValue().trim(), fieldMap.size());
-                        }
-                    }
-                    break;
-                case " static ":
-                    for (int i = 2; i < children.length; i++) {
-                        if (children[i].getTagName().equals("identifier")) {
-                            staticMap.put(children[i].getFirstChild().getNodeValue().trim(), fieldMap.size());
-                        }
-                    }
-                    break;
+            ArrayList<Document> docs = new ArrayList<Document>();
+            for (int i = 0; i < args.length - 1; i++) {
+                docs.add(new JackAnalyzer(new JackTokenizer(args[i])).analyze());
             }
-        }
 
-        Element[] nodesSubroutineDec = getChildrenByTagName(doc.getDocumentElement(), "subroutineDec");
-        for (Element currNode : nodesSubroutineDec) {
-            procSubroutineDec(currNode);
-        }
-    }
+            ArrayList<String> codes = (new JackCodeGenerator(docs)).generate();
 
-    private void procSubroutineDec(Element dec) throws JackCompilerException {
-        Element[] children = getChildren(dec);
-        switch (children[0].getFirstChild().getNodeValue().trim()) {
-            case "constructor":
-                procConstructor(dec);
-                break;
-            case "function":
-                procFunction(dec);
-                break;
-            case "method":
-                procMethod(dec);
-                break;
-        }
-    }
-
-    private void procConstructor(Element dec) throws JackCompilerException {
-        Element[] children = getChildren(dec);
-        String constructorName = children[2].getFirstChild().getNodeValue().trim();
-        ArrayList<Pair> parameters = getParameterList(children[4]);
-        ArrayList<Pair> localVariables = getLocalVariableList(children[6]);
-        codes.add("function " + className + "." + constructorName + " " + localVariables.size());
-    }
-
-    private void procFunction(Element dec) throws JackCompilerException {
-        Element[] children = getChildren(dec);
-        String constructorName = children[2].getFirstChild().getNodeValue().trim();
-        ArrayList<Pair> parameters = getParameterList(children[4]);
-        ArrayList<Pair> localVariables = getLocalVariableList(children[6]);
-        codes.add("function " + className + "." + constructorName + " " + localVariables.size());
-    }
-
-    private void procMethod(Element dec) throws JackCompilerException {
-        Element[] children = getChildren(dec);
-        String constructorName = children[2].getFirstChild().getNodeValue().trim();
-        ArrayList<Pair> parameters = getParameterList(children[4]);
-        ArrayList<Pair> localVariables = getLocalVariableList(children[6]);
-        codes.add("function " + className + "." + constructorName + " " + localVariables.size());
-    }
-
-
-    private class Pair {
-        String name;
-        String type;
-    }
-
-    private ArrayList<Pair> getParameterList(Element param) throws JackCompilerException {
-        Element[] children = getChildren(param);
-        ArrayList<Pair> ret = new ArrayList<Pair>();
-        Pair temp = null;
-        for (int i = 0; i < children.length; i++) {
-            if (i % 3 == 0) {
-                temp = new Pair();
-                temp.type = children[i].getFirstChild().getNodeValue().trim();
-            } else if (i % 3 == 1) {
-                temp.name = children[i].getFirstChild().getNodeValue().trim();
-                ret.add(temp);
+            FileWriter fw = new FileWriter(args[args.length - 1]);
+            for (String code : codes) {
+                fw.write(code);
+                fw.write("\r\n");
             }
+            fw.flush();
+            fw.close();
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        return ret;
-    }
-
-    private ArrayList<Pair> getLocalVariableList(Element subroutineBody) throws JackCompilerException {
-        Element[] children = getChildren(subroutineBody);
-        ArrayList<Pair> ret = new ArrayList<Pair>();
-
-        for (Element child : children) {
-            if (child.getTagName().equals("varDec")) {
-                Element[] list = getChildren(child);
-                String typeName = list[1].getFirstChild().getNodeValue().trim();
-                for (int j = 2; j < list.length; j += 2) {
-                    String name = list[j].getFirstChild().getNodeValue().trim();
-                    Pair temp = new Pair();
-                    temp.name = name;
-                    temp.type = typeName;
-                    ret.add(temp);
-                }
-            }
-        }
-
-        return ret;
     }
 
 }
