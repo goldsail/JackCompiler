@@ -1,1 +1,18 @@
-function Main.main 4
+function Test.main 4
+pop local 1
+pop local 0
+pop local 2
+label LABEL_0
+not
+if-goto LABEL_1
+goto LABEL_0
+label LABEL_1
+pop local 2
+pop local 3
+label LABEL_2
+not
+if-goto LABEL_3
+goto LABEL_2
+label LABEL_3
+push constant 0
+return

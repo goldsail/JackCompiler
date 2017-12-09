@@ -71,7 +71,7 @@ public class JackAnalyzer {
         return null;
     }
 
-    private static void writeXML(Document document, String filename) {
+    static void writeXML(Document document, String filename) {
         try {
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
             Transformer transformer = transformerFactory.newTransformer();

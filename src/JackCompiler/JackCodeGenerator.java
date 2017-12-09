@@ -1,7 +1,6 @@
 package JackCompiler;
 
 import org.w3c.dom.*;
-import sun.plugin.com.JavaClass;
 
 import java.io.FileWriter;
 import java.util.ArrayList;
@@ -17,6 +16,14 @@ public class JackCodeGenerator {
             this.name = name;
             this.type = type;
             this.address = address;
+        }
+    }
+
+    private static class Label {
+        static int count = -1;
+        static String next() {
+            count++;
+            return "LABEL_" + Integer.toString(count);
         }
     }
 
@@ -194,23 +201,157 @@ public class JackCodeGenerator {
         }
     }
 
-    private void procLetStatement(Element node) throws JackCompilerException {
+    private enum SymbolType {
+        Static,
+        Local,
+        Argument,
+        Field
+    }
 
+    private SymbolType findSymbolType(String name) throws JackCompilerException {
+        if (this.fieldMap.get(name) != null) {
+            return SymbolType.Field;
+        } else if (this.staticMap.get(name) != null) {
+            return SymbolType.Static;
+        } else if (this.localMap.get(name) != null) {
+            return SymbolType.Local;
+        } else if (this.argumentMap.get(name) != null) {
+            return SymbolType.Argument;
+        } else {
+            throw new JackCompilerException();
+        }
+    }
+
+    private void procLetStatement(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+        String leftVarName = children.get(1).getFirstChild().getNodeValue();
+
+        int pos;
+        switch (children.get(2).getFirstChild().getNodeValue()) {
+            case "=":
+                procExpression(children.get(3));
+                switch (findSymbolType(leftVarName)) {
+                    case Field:
+                        pos = fieldMap.get(leftVarName).address;
+                        codes.add("pop this " + Integer.toString(pos));
+                        break;
+                    case Static:
+                        pos = staticMap.get(leftVarName).address;
+                        codes.add("pop static " + Integer.toString(pos));
+                        break;
+                    case Local:
+                        pos = localMap.get(leftVarName).address;
+                        codes.add("pop local " + Integer.toString(pos));
+                        break;
+                    case Argument:
+                        pos = argumentMap.get(leftVarName).address;
+                        codes.add("pop argument " + Integer.toString(pos));
+                        break;
+                }
+                break;
+            case "[":
+                procExpression(children.get(3));
+                switch (findSymbolType(leftVarName)) {
+                    case Field:
+                        pos = fieldMap.get(leftVarName).address;
+                        codes.add("push this " + Integer.toString(pos));
+                        break;
+                    case Static:
+                        pos = staticMap.get(leftVarName).address;
+                        codes.add("push static " + Integer.toString(pos));
+                        break;
+                    case Local:
+                        pos = localMap.get(leftVarName).address;
+                        codes.add("push local " + Integer.toString(pos));
+                        break;
+                    case Argument:
+                        pos = argumentMap.get(leftVarName).address;
+                        codes.add("push argument " + Integer.toString(pos));
+                        break;
+                }
+                codes.add("add");
+                procExpression(children.get(6));
+                codes.add("pop temp 0");
+                codes.add("pop pointer 1");
+                codes.add("push temp 0");
+                codes.add("pop that 0");
+                break;
+        }
     }
 
     private void procIfStatement(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+        switch (children.size()) {
+            case 7: // if
+                procExpression(children.get(2));
+                codes.add("not");
+                String label = Label.next();
+                codes.add("if-goto " + label);
+                procStatements(children.get(5));
+                codes.add("label " + label);
+                break;
+            case 11: // if-else
+                procExpression(children.get(2));
+                codes.add("not");
+                String label1 = Label.next();
+                String label2 = Label.next();
+                codes.add("if-goto " + label1);
+                procStatements(children.get(5));
+                codes.add("goto " + label2);
+                codes.add("label " + label1);
+                procStatements(children.get(9));
+                codes.add("label " + label2);
+                break;
+            default:
+                throw new JackCompilerException();
+        }
+        procStatements(children.get(2));
 
     }
 
     private void procWhileStatement(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+        String label1 = Label.next();
+        String label2 = Label.next();
 
+        codes.add("label " + label1);
+        procExpression(children.get(2));
+        codes.add("not");
+        codes.add("if-goto " + label2);
+        procStatements(children.get(5));
+        codes.add("goto " + label1);
+        codes.add("label " + label2);
     }
 
     private void procDoStatement(Element node) throws JackCompilerException {
-
+        ArrayList<Element> children = getChildren(node);
+        procSubroutineCall(children.get(1));
     }
 
     private void procReturnStatement(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+        switch (children.size()) {
+            case 2:
+                codes.add("push constant 0");
+                codes.add("return");
+                break;
+            case 3:
+                procExpression(children.get(1));
+                codes.add("return");
+        }
+    }
+
+    //
+
+    private void procExpression(Element node) throws JackCompilerException {
+
+    }
+
+    private void procSubroutineCall(Element node) throws JackCompilerException {
+
+    }
+
+    private void procTerm(Element node) throws JackCompilerException {
 
     }
 
@@ -233,11 +374,15 @@ public class JackCodeGenerator {
     public static void main(String[] args) {
         try {
 
-            ArrayList<String> codes = new JackCodeGenerator(new JackAnalyzer(new JackTokenizer(args[0]))
-                    .analyze())
+            Document doc = new JackAnalyzer(new JackTokenizer(args[0]))
+                    .analyze();
+
+            JackAnalyzer.writeXML(doc, args[1]);
+
+            ArrayList<String> codes = new JackCodeGenerator(doc)
                     .generate();
 
-            FileWriter fw = new FileWriter(args[1]);
+            FileWriter fw = new FileWriter(args[2]);
             for (String code : codes) {
                 fw.write(code);
                 fw.write("\r\n");

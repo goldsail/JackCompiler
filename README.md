@@ -40,6 +40,6 @@ Run the unit test without IntelliJ IDEA:
 cd <this git repo>
 javac -d ./out/shell/ ./src/JackCompiler/*.java
 cd ./out/shell/
-java JackCompiler.JackCodeGenerator ../../test/test.jack ../../test/test.vm
+java JackCompiler.JackCodeGenerator ../../test/Test.jack ../../test/Test.xml ../../test/Test.vm
 cd ../../
 ```
