@@ -30,6 +30,16 @@ cd ../../
 
 This module implements the `JackAnalyzer` in textbook on pp.208-209. It reads a `.jack` file, parses it, and output an `.xml` file.
 
-## `JackCodeGenerator` Module
+## `JackCodeGenerator` Module (developing)
 
-Developing using recursive-descent. It should be able to generate a single `.vm` file from several input `.xml` files, each file defining a class. 
+Developing using recursive-descent. It should be able to generate a `.vm` file from an input `.xml` file.
+
+Run the unit test without IntelliJ IDEA:
+
+```bash
+cd <this git repo>
+javac -d ./out/shell/ ./src/JackCompiler/*.java
+cd ./out/shell/
+java JackCompiler.JackCodeGenerator ../../test/test.jack ../../test/test.vm
+cd ../../
+```
