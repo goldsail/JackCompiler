@@ -33,6 +33,8 @@ public class JackCodeGenerator {
     private HashMap<String, Symbol> staticMap;
     private HashMap<String, Symbol> localMap;
     private HashMap<String, Symbol> argumentMap;
+    private HashMap<String, String> subroutineMap;
+
     private String className;
 
     public JackCodeGenerator(Document doc) {
@@ -45,6 +47,7 @@ public class JackCodeGenerator {
         this.className = getChildren(doc.getDocumentElement()).get(1).getFirstChild().getNodeValue();
 
         procFieldsAndStatics(doc.getDocumentElement());
+        procSubroutineMap(doc.getDocumentElement());
 
         for (Element subroutineDec : getChildren(doc.getDocumentElement())) {
             if (subroutineDec.getTagName().equals("subroutineDec")) {
@@ -118,8 +121,23 @@ public class JackCodeGenerator {
 
     }
 
+    private void procSubroutineMap(Element node) throws JackCompilerException {
+        this.subroutineMap = new HashMap<String, String>();
+
+        ArrayList<Element> children = getChildren(node);
+
+        for (Element dec : children) {
+            if (dec.getTagName().equals("subroutineDec")) {
+                ArrayList<Element> list = getChildren(dec);
+                String name = list.get(2).getFirstChild().getNodeValue();
+                String type = list.get(0).getFirstChild().getNodeValue();
+                this.subroutineMap.put(name, type);
+            }
+        }
+    }
+
     private void procSubroutine(Element node) throws JackCompilerException {
-        HashMap<String, Symbol> localMap = new HashMap<String, Symbol>();
+        this.localMap = new HashMap<String, Symbol>();
         ArrayList<Element> children = getChildren(node);
         String subroutineType = children.get(0).getFirstChild().getNodeValue();
 
@@ -148,7 +166,7 @@ public class JackCodeGenerator {
 
         codes.add("function " + className + "." + subroutineName + " " + Integer.toString(localMap.size()));
 
-        procStatements(children.get(6));
+        procSubroutineStatements(children.get(6));
     }
 
     private void procMethod(Element node) throws JackCompilerException {
@@ -157,7 +175,9 @@ public class JackCodeGenerator {
         String subroutineName = children.get(2).getFirstChild().getNodeValue();
 
         codes.add("function " + className + "." + subroutineName + " " + Integer.toString(localMap.size()));
-        procStatements(children.get(6));
+        codes.add("push argument 0");
+        codes.add("pop pointer 0");
+        procSubroutineStatements(children.get(6));
     }
 
     private void procConstructor(Element node) throws JackCompilerException {
@@ -170,10 +190,34 @@ public class JackCodeGenerator {
         codes.add("push constant " + Integer.toString(this.fieldMap.size()));
         codes.add("call Memory.alloc 1");
 
-        procStatements(children.get(6));
+        procSubroutineStatements(children.get(6));
     }
 
     private void procStatements(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+        for (Element statement : children) {
+            switch (statement.getTagName()) {
+                case "letStatement":
+                    procLetStatement(statement);
+                    break;
+                case "ifStatement":
+                    procIfStatement(statement);
+                    break;
+                case "whileStatement":
+                    procWhileStatement(statement);
+                    break;
+                case "doStatement":
+                    procDoStatement(statement);
+                    break;
+                case "returnStatement":
+                    procReturnStatement(statement);
+                    break;
+            }
+        }
+    }
+
+
+    private void procSubroutineStatements(Element node) throws JackCompilerException {
         ArrayList<Element> children = getChildren(node);
         for (Element st : children) {
             if (st.getTagName().equals("statements")) {
@@ -218,7 +262,7 @@ public class JackCodeGenerator {
         } else if (this.argumentMap.get(name) != null) {
             return SymbolType.Argument;
         } else {
-            throw new JackCompilerException();
+            return null;
         }
     }
 
@@ -326,6 +370,7 @@ public class JackCodeGenerator {
     private void procDoStatement(Element node) throws JackCompilerException {
         ArrayList<Element> children = getChildren(node);
         procSubroutineCall(children.get(1));
+        codes.add("pop temp 0");
     }
 
     private void procReturnStatement(Element node) throws JackCompilerException {
@@ -344,15 +389,204 @@ public class JackCodeGenerator {
     //
 
     private void procExpression(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+
+        procTerm(children.get(0));
+
+        for (int i = 1; i < children.size(); i += 2) {
+            procTerm(children.get(i + 1));
+            switch (children.get(i).getFirstChild().getNodeValue()) {
+                case "+":
+                    codes.add("add");
+                    break;
+                case "-":
+                    codes.add("sub");
+                    break;
+                case "*":
+                    codes.add("call Math.multiply 2");
+                    break;
+                case "/":
+                    codes.add("call Math.divide 2");
+                    break;
+                case "&":
+                    codes.add("and");
+                    break;
+                case "|":
+                    codes.add("or");
+                    break;
+                case "<":
+                    codes.add("lt");
+                    break;
+                case ">":
+                    codes.add("gt");
+                    break;
+                case "=":
+                    codes.add("eq");
+                    break;
+            }
+        }
 
     }
 
     private void procSubroutineCall(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
+
+        String className = null;
+        String subroutineName = null;
+
+        int parameterCount = 0;
+
+        switch (children.get(1).getFirstChild().getNodeValue()) {
+            case ".":
+                String classNameOrVarName = null;
+                classNameOrVarName = children.get(0).getFirstChild().getNodeValue();
+                subroutineName = children.get(2).getFirstChild().getNodeValue();
+                SymbolType symbolType = findSymbolType(classNameOrVarName);
+                if (symbolType == null) {
+                    // it is a className
+                    className = classNameOrVarName;
+                } else switch (symbolType) {
+                    // it is a varName
+                    case Static:
+                        className = this.staticMap.get(classNameOrVarName).type;
+                        codes.add("push static " + Integer.toString(this.staticMap.get(classNameOrVarName).address));
+                        parameterCount++;
+                        break;
+                    case Field:
+                        className = this.fieldMap.get(classNameOrVarName).type;
+                        codes.add("push this " + Integer.toString(this.fieldMap.get(classNameOrVarName).address));
+                        parameterCount++;
+                        break;
+                    case Argument:
+                        className = this.argumentMap.get(classNameOrVarName).type;
+                        codes.add("push argument " + Integer.toString(this.argumentMap.get(classNameOrVarName).address));
+                        parameterCount++;
+                        break;
+                    case Local:
+                        className = this.localMap.get(classNameOrVarName).type;
+                        codes.add("push local " + Integer.toString(this.localMap.get(classNameOrVarName).address));
+                        parameterCount++;
+                        break;
+                }
+                break;
+            case "(":
+                className = this.className;
+                subroutineName = children.get(0).getFirstChild().getNodeValue();
+                switch (this.subroutineMap.get(subroutineName)) {
+                    case "constructor":
+                        break;
+                    case "method":
+                        codes.add("push argument 0");
+                        parameterCount++;
+                        break;
+                    case "function":
+
+                        break;
+                }
+                break;
+        }
+
+        ArrayList<Element> expressions = getChildren(children.get(4));
+        for (Element expr : expressions) {
+            procExpression(expr);
+            parameterCount++;
+        }
+
+        codes.add("call " + className + "." + subroutineName + " " + Integer.toString(parameterCount));
 
     }
 
     private void procTerm(Element node) throws JackCompilerException {
+        ArrayList<Element> children = getChildren(node);
 
+        String tagName = children.get(0).getTagName();
+        if (tagName.equals("integerConstant")) {
+            codes.add("push constant " + children.get(0).getFirstChild().getNodeValue());
+        } else if (tagName.equals("stringConstant")) {
+            String str = children.get(0).getFirstChild().getNodeValue();
+            codes.add("push constant " + Integer.toString(str.length()));
+            codes.add("call String.new 1");
+            for (int i = 0; i < str.length(); i++) {
+                codes.add("push constant " + Integer.toString((int)str.charAt(i)));
+                codes.add("call String.appendChar 2");
+            }
+        } else if (tagName.equals("keyword")) {
+            switch (children.get(0).getFirstChild().getNodeValue()) {
+                case "true":
+                    codes.add("push constant 0");
+                    codes.add("not");
+                    break;
+                case "false":
+                    codes.add("push constant 0");
+                    break;
+                case "null":
+                    codes.add("push constant 0");
+                    break;
+                case "this":
+                    codes.add("push argument 0");
+                    break;
+                default:
+                    throw new JackCompilerException();
+            }
+        } else if (tagName.equals("subroutineCall")) {
+            procSubroutineCall(children.get(0));
+        } else if (tagName.equals("expression")) {
+            procExpression(children.get(0));
+        } else if (tagName.equals("symbol")) {
+            procTerm(children.get(1));
+            switch (children.get(0).getFirstChild().getNodeValue()) {
+                case "-":
+                    codes.add("sub");
+                    break;
+                case "~":
+                    codes.add("not");
+                    break;
+                default:
+                    throw new JackCompilerException();
+            }
+        } else if (tagName.equals("identifier")) {
+            String name = children.get(0).getFirstChild().getNodeValue();
+            switch (children.size()) {
+                case 1:
+                    switch (findSymbolType(children.get(0).getFirstChild().getNodeValue())) {
+                        case Field:
+                            codes.add("push this " + Integer.toString(this.fieldMap.get(name).address));
+                            break;
+                        case Static:
+                            codes.add("push static " + Integer.toString(this.staticMap.get(name).address));
+                            break;
+                        case Local:
+                            codes.add("push local " + Integer.toString(this.localMap.get(name).address));
+                            break;
+                        case Argument:
+                            codes.add("push argument " + Integer.toString(this.argumentMap.get(name).address));
+                            break;
+                    }
+                    break;
+                case 4:
+                    procExpression(children.get(2));
+                    switch (findSymbolType(children.get(0).getFirstChild().getNodeValue())) {
+                        case Field:
+                            codes.add("push this " + Integer.toString(this.fieldMap.get(name).address));
+                            break;
+                        case Static:
+                            codes.add("push static " + Integer.toString(this.staticMap.get(name).address));
+                            break;
+                        case Local:
+                            codes.add("push local " + Integer.toString(this.localMap.get(name).address));
+                            break;
+                        case Argument:
+                            codes.add("push argument " + Integer.toString(this.argumentMap.get(name).address));
+                            break;
+                    }
+                    codes.add("add");
+                    codes.add("pop pointer 1");
+                    codes.add("push that 0");
+                    break;
+                default:
+                    throw new JackCompilerException();
+            }
+        }
     }
 
     private static ArrayList<Element> getChildren(Element node) {
